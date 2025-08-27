@@ -1,4 +1,13 @@
 <?php
+// Import PHPMailer classes into the global namespace
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+
+// Load the PHPMailer library files
+require 'PHPMailer/src/Exception.php';
+require 'PHPMailer/src/PHPMailer.php';
+require 'PHPMailer/src/SMTP.php';
+
 $servername = "localhost";
 $username = "karveweb_testusr";
 $password = "!!Hulk@123!!";
@@ -24,25 +33,65 @@ $message = htmlspecialchars($_POST['message']);
 
 // Execute the statement
 if ($stmt->execute()) {
-    // Database insert was successful. Now, attempt to send the email.
-    $to = 'prasadkarve4@gmail.com'; // This should be the admin's email address
-    $subject = "New Contact Form Submission from " . $name;
-    $headers = "From: " . $email . "\r\n" .
-               "Reply-To: " . $email . "\r\n" .
-               "Content-Type: text/plain; charset=UTF-8\r\n" .
-               "X-Mailer: PHP/" . phpversion();
+    // Database insert was successful. Now, attempt to send the email using PHPMailer.
+    $mail = new PHPMailer(true); // Passing `true` enables exceptions
 
-    $body = "You have received a new message from your website contact form.\n\n";
-    $body .= "Name: " . $name . "\n";
-    $body .= "Email: " . $email . "\n\n";
-    $body .= "Message:\n" . $message . "\n";
+    try {
+        // --- SMTP SERVER SETTINGS ---
+        // IMPORTANT: You must replace these placeholder values with your actual SMTP credentials.
+        // You can get these from your email provider (e.g., Gmail, Outlook, SendGrid, etc.).
 
-    // Attempt to send mail and log error on failure
-    if (!mail($to, $subject, $body, $headers)) {
-        error_log("Contact form email failed to send. To: $to, Subject: $subject");
+        // Enable verbose debug output (optional, useful for troubleshooting)
+        // Set to 0 for production use
+        $mail->SMTPDebug = 0; // SMTP::DEBUG_SERVER;
+
+        // Set mailer to use SMTP
+        $mail->isSMTP();
+
+        // Specify main and backup SMTP servers
+        $mail->Host = 'smtp.example.com'; // e.g., 'smtp.gmail.com'
+
+        // Enable SMTP authentication
+        $mail->SMTPAuth = true;
+
+        // SMTP username
+        $mail->Username = 'your_email@example.com'; // Your SMTP username
+
+        // SMTP password
+        $mail->Password = 'your_smtp_password'; // Your SMTP password
+
+        // Enable TLS encryption; `PHPMailer::ENCRYPTION_SMTPS` also accepted
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+
+        // TCP port to connect to
+        $mail->Port = 587; // Use 465 for `PHPMailer::ENCRYPTION_SMTPS`
+
+        // --- RECIPIENTS ---
+        $admin_email = 'prasadkarve4@gmail.com'; // The admin's email address
+        $mail->setFrom($email, $name); // Sender's email and name (from form)
+        $mail->addAddress($admin_email, 'Admin'); // Add a recipient (the admin)
+        $mail->addReplyTo($email, $name); // Set the Reply-To to the user's email
+
+        // --- CONTENT ---
+        $mail->isHTML(false); // Set email format to plain text
+        $mail->Subject = "New Contact Form Submission from " . $name;
+
+        $body = "You have received a new message from your website contact form.\n\n";
+        $body .= "Name: " . $name . "\n";
+        $body .= "Email: " . $email . "\n\n";
+        $body .= "Message:\n" . $message . "\n";
+        $mail->Body = $body;
+
+        $mail->send();
+        // Email sent successfully
+
+    } catch (Exception $e) {
+        // Email failed to send. Log the detailed error message.
+        error_log("Message could not be sent. Mailer Error: {$mail->ErrorInfo}");
     }
 
-    // Redirect to a 'thank you' page to prevent re-submission on refresh
+    // Redirect to a 'thank you' page regardless of email sending status.
+    // This prevents re-submission on refresh.
     header("Location: thank_you.html");
     exit();
 
