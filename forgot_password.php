@@ -1,13 +1,27 @@
 <?php
+// Include configuration and autoloader
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/vendor/autoload.php';
+
+// Use PHPMailer classes
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+
+$message = '';
+$error = '';
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = $_POST['email'];
 
-    $conn = new mysqli('localhost', 'root', '', 'contactdb');
-    if ($conn->connect_error) die("Connection failed: " . $conn->connect_error);
+    $conn = new mysqli(DB_HOST, DB_USERNAME, DB_PASSWORD, DB_NAME);
+    if ($conn->connect_error) {
+        error_log("Database connection failed: " . $conn->connect_error);
+        die("Connection failed. Please try again later.");
+    }
 
     // Find admin id by email
-    $stmt = $conn->prepare('SELECT id FROM admins WHERE username = ?');
-    $stmt->bind_param('s', $email); // Assuming username is email; adjust if needed
+    $stmt = $conn->prepare('SELECT id FROM admins WHERE email = ?');
+    $stmt->bind_param('s', $email);
     $stmt->execute();
     $stmt->store_result();
 
@@ -15,42 +29,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->bind_result($admin_id);
         $stmt->fetch();
 
+        // Generate a secure token
         $token = bin2hex(random_bytes(50));
-        $expires = date("Y-m-d H:i:s", strtotime('+1 hour'));
+        $expires = date("Y-m-d H:i:s", time() + 3600); // Token expires in 1 hour
 
-        // Save token to password_resets table, after deleting old tokens for this admin
-        $conn->query("DELETE FROM password_resets WHERE admin_id = $admin_id");
-        $stmt2 = $conn->prepare("INSERT INTO password_resets (admin_id, token, expires_at) VALUES (?, ?, ?)");
-        $stmt2->bind_param('iss', $admin_id, $token, $expires);
-        $stmt2->execute();
-
-        // Send reset email using PHPMailer (adjust your SMTP settings)
-        require 'vendor/autoload.php';
-        $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+        // Begin transaction
+        $conn->begin_transaction();
 
         try {
-            // SMTP Config
-            $mail->isSMTP();
-            $mail->Host = 'smtp.example.com';
-            $mail->SMTPAuth = true;
-            $mail->Username = 'your_email@example.com';
-            $mail->Password = 'your_email_password';
-            $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-            $mail->Port = 587;
+            // Delete any old tokens for this user
+            $delete_stmt = $conn->prepare("DELETE FROM password_resets WHERE admin_id = ?");
+            $delete_stmt->bind_param('i', $admin_id);
+            $delete_stmt->execute();
 
-            $mail->setFrom('your_email@example.com', 'Site Admin');
+            // Save new token to the password_resets table
+            $insert_stmt = $conn->prepare("INSERT INTO password_resets (admin_id, token, expires_at) VALUES (?, ?, ?)");
+            $insert_stmt->bind_param('iss', $admin_id, $token, $expires);
+            $insert_stmt->execute();
+
+            // Send reset email using PHPMailer
+            $mail = new PHPMailer(true);
+            $mail->isSMTP();
+            $mail->Host = SMTP_HOST;
+            $mail->SMTPAuth = true;
+            $mail->Username = SMTP_USERNAME;
+            $mail->Password = SMTP_PASSWORD;
+            $mail->SMTPSecure = SMTP_SECURE;
+            $mail->Port = SMTP_PORT;
+
+            $mail->setFrom(SITE_EMAIL, 'Site Admin');
             $mail->addAddress($email);
             $mail->isHTML(true);
             $mail->Subject = 'Password Reset Request';
-            $mail->Body = "Click the link to reset your password: <a href='https://yourdomain.com/reset_password.php?token=$token'>Reset Password</a>";
+            $reset_link = rtrim(BASE_URL, '/') . '/reset_password.php?token=' . $token;
+            $mail->Body = "Click the link to reset your password: <a href='$reset_link'>$reset_link</a>";
 
             $mail->send();
-            echo "Password reset link sent to your email.";
+
+            // Commit transaction
+            $conn->commit();
+            $message = "A password reset link has been sent to your email address.";
+
         } catch (Exception $e) {
-            echo "Mailer Error: {$mail->ErrorInfo}";
+            $conn->rollback();
+            error_log("Password reset failed for $email. Mailer Error: {$mail->ErrorInfo}");
+            $error = "Could not send the reset email. Please try again later.";
         }
     } else {
-        echo "No admin found with that email.";
+        // To prevent user enumeration, show a generic message even if the email doesn't exist.
+        $message = "If an account with that email exists, a password reset link has been sent.";
     }
     $stmt->close();
     $conn->close();
@@ -59,13 +86,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <!DOCTYPE html>
 <html>
-<head><title>Forgot Password</title></head>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forgot Password</title>
+</head>
 <body>
-<h2>Forgot Password</h2>
-<form method="POST" action="">
-  <label>Enter your username/email:</label><br>
-  <input type="email" name="email" required><br>
-  <button type="submit">Send Reset Link</button>
-</form>
+    <h2>Forgot Password</h2>
+    <p>Enter your email address and we will send you a link to reset your password.</p>
+
+    <?php if ($message): ?>
+        <p style="color:green;"><?= htmlspecialchars($message) ?></p>
+    <?php endif; ?>
+    <?php if ($error): ?>
+        <p style="color:red;"><?= htmlspecialchars($error) ?></p>
+    <?php endif; ?>
+
+    <form method="POST" action="forgot_password.php">
+        <label for="email">Your Email:</label><br>
+        <input type="email" id="email" name="email" required><br><br>
+        <button type="submit">Send Reset Link</button>
+    </form>
+    <p><a href="login.php">Back to Login</a></p>
 </body>
 </html>

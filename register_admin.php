@@ -1,45 +1,76 @@
 <?php
-// Example script to create an admin user with hashed password
-// Run once, then delete or restrict access for security
+// Include configuration
+require_once __DIR__ . '/config.php';
 
-$servername = "localhost";
-$username = "karveweb_testusr";
-$password = "!!Hulk@123!!";
-$dbname = "karveweb_test";
-
-$conn = new mysqli($servername, $username, $password, $dbname);
-if ($conn->connect_error) die("Connection failed: " . $conn->connect_error);
+$message = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $username_input = $_POST['username'];
-    $password_input = $_POST['password'];
-    $hash = password_hash($password_input, PASSWORD_DEFAULT);
-
-    $stmt = $conn->prepare("INSERT INTO admins (username, password) VALUES (?, ?)");
-    $stmt->bind_param("ss", $username_input, $hash);
-
-    if ($stmt->execute()) {
-        echo "Admin registered successfully.";
-    } else {
-        echo "Error: " . $stmt->error;
+    // Create database connection
+    $conn = new mysqli(DB_HOST, DB_USERNAME, DB_PASSWORD, DB_NAME);
+    if ($conn->connect_error) {
+        error_log("Database connection failed: " . $conn->connect_error);
+        die("Connection failed. Please try again later.");
     }
+
+    $email_input = $_POST['email'];
+    $password_input = $_POST['password'];
+
+    // It's a good idea to check if the email is already registered
+    $stmt = $conn->prepare("SELECT id FROM admins WHERE email = ?");
+    $stmt->bind_param("s", $email_input);
+    $stmt->execute();
+    $stmt->store_result();
+
+    if ($stmt->num_rows > 0) {
+        $message = "Error: An admin with this email address already exists.";
+    } else {
+        // Hash the password
+        $hash = password_hash($password_input, PASSWORD_DEFAULT);
+
+        // Insert the new admin
+        $stmt_insert = $conn->prepare("INSERT INTO admins (email, password) VALUES (?, ?)");
+        $stmt_insert->bind_param("ss", $email_input, $hash);
+
+        if ($stmt_insert->execute()) {
+            $message = "Admin registered successfully. You should now DELETE this script.";
+        } else {
+            $message = "Error: " . $stmt_insert->error;
+            error_log("Admin registration failed: " . $stmt_insert->error);
+        }
+        $stmt_insert->close();
+    }
+
     $stmt->close();
     $conn->close();
-    exit;
 }
 ?>
 
 <!DOCTYPE html>
 <html>
-<head><title>Register Admin</title></head>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register Admin</title>
+</head>
 <body>
-<h2>Register Admin (Run Once)</h2>
-<form method="POST" action="">
-  <label>Username:</label><br>
-  <input type="text" name="username" required><br>
-  <label>Password:</label><br>
-  <input type="password" name="password" required><br>
-  <button type="submit">Register</button>
-</form>
+    <h2>Register Admin (Run Once & Then Delete)</h2>
+    <p style="color:red; font-weight:bold;">
+        SECURITY WARNING: This script is for initial setup only.
+        You must delete it from your server immediately after creating your first admin account.
+    </p>
+
+    <?php if ($message): ?>
+        <p><?= htmlspecialchars($message) ?></p>
+    <?php endif; ?>
+
+    <form method="POST" action="register_admin.php">
+        <label for="email">Email:</label><br>
+        <input type="email" id="email" name="email" required><br><br>
+
+        <label for="password">Password:</label><br>
+        <input type="password" id="password" name="password" required><br><br>
+
+        <button type="submit">Register</button>
+    </form>
 </body>
 </html>
