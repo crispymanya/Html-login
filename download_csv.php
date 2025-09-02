@@ -1,27 +1,45 @@
 <?php
+// Include configuration
+require_once __DIR__ . '/config.php';
+
 session_start();
+
+// Check if the user is logged in, otherwise redirect to login page
 if (!isset($_SESSION['admin_id'])) {
     header('Location: login.php');
     exit;
 }
 
-$servername = "localhost";
-$username = "karveweb_testusr";
-$password = "!!Hulk@123!!";
-$dbname = "karveweb_test";
+// Create database connection
+$conn = new mysqli(DB_HOST, DB_USERNAME, DB_PASSWORD, DB_NAME);
+if ($conn->connect_error) {
+    error_log("Database connection failed: " . $conn->connect_error);
+    die("Connection failed. Please try again later.");
+}
 
-$conn = new mysqli($servername, $username, $password, $dbname);
-if ($conn->connect_error) die("Connection failed: " . $conn->connect_error);
+// Set headers for CSV download
+$filename = "contact_entries_" . date('Y-m-d') . ".csv";
+header('Content-Type: text/csv; charset=utf-8');
+header('Content-Disposition: attachment; filename=' . $filename);
 
-header('Content-Type: text/csv');
-header('Content-Disposition: attachment;filename=contact_entries.csv');
-
+// Open output stream
 $output = fopen('php://output', 'w');
-fputcsv($output, ['ID', 'Name', 'Email', 'Message']);
 
-$result = $conn->query("SELECT * FROM contacts");
-while ($row = $result->fetch_assoc()) {
-    fputcsv($output, [$row['id'], $row['name'], $row['email'], $row['message']]);
+// Add CSV header row
+fputcsv($output, ['ID', 'Name', 'Email', 'Message', 'Submitted At']);
+
+// Fetch data from the database and write to CSV
+$result = $conn->query("SELECT id, name, email, message, created_at FROM contacts ORDER BY id ASC");
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        fputcsv($output, [
+            $row['id'],
+            $row['name'],
+            $row['email'],
+            $row['message'],
+            $row['created_at']
+        ]);
+    }
 }
 
 fclose($output);
