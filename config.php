@@ -8,9 +8,9 @@ ini_set('error_log', __DIR__ . '/error.log'); // Ensure this path is writable
 // --- DATABASE CONFIGURATION ---
 // Replace with your actual database credentials
 define('DB_HOST', 'localhost');
-define('DB_USERNAME', 'your_db_username');
-define('DB_PASSWORD', 'your_db_password');
-define('DB_NAME', 'your_db_name');
+define('DB_USERNAME', 'karveweb_testusr');
+define('DB_PASSWORD', '!!Hulk@123!!');
+define('DB_NAME', 'karveweb_test');
 
 // --- SMTP MAILER CONFIGURATION ---
 // Replace with your actual SMTP credentials from your email provider
@@ -30,5 +30,5 @@ define('SITE_EMAIL', 'noreply@test.karveweb.solutions');
 
 // The base URL of your site, for creating password reset links.
 // Example: 'https://www.yourwebsite.com'
-define('BASE_URL', 'http://localhost');
+define('BASE_URL', 'http://test.karveweb.solutions');
 ?>
