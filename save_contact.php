@@ -39,20 +39,41 @@ if ($stmt->execute()) {
         $mail->Port = SMTP_PORT;
         $mail->SMTPDebug = 0; // Set to 2 for debugging, 0 for production
 
-        // --- RECIPIENTS ---
-        $mail->setFrom(SITE_EMAIL, 'Contact Form'); // Set a generic "From" address
-        $mail->addAddress(ADMIN_EMAIL);           // The admin's email from config
-        $mail->addReplyTo($email, $name);         // Set the Reply-To to the user's email
+        // --- RECIPIENTS (Admin) ---
+        $mail->setFrom(SMTP_USERNAME, 'Contact Form'); // Use SMTP username as "From"
+        $mail_user = SMTP_USERNAME;
+        $mail->addAddress(ADMIN_EMAIL);               // The admin's email from config
+        $mail->addReplyTo($email, $name);             // Set the Reply-To to the user's email
 
-        // --- CONTENT ---
+        // --- CONTENT (Admin) ---
         $mail->isHTML(false);
         $mail->Subject = "New Contact Form Submission from " . $name;
-        $body = "You have received a new message from your website contact form.\n\n" .
-                "Name: " . $name . "\n" .
-                "Email: " . $email . "\n\n" .
-                "Message:\n" . $message . "\n";
-        $mail->Body = $body;
+        $admin_body = "You have received a new message from your website contact form.\n\n" .
+                      "Name: " . $name . "\n" .
+                      "Email: " . $email . "\n\n" .
+                      "Message:\n" . $message . "\n";
+        $mail->Body = $admin_body;
 
+        // Send to admin
+        $mail->send();
+
+        // --- Clear recipients and settings for the next email ---
+        $mail->clearAllRecipients();
+        $mail->clearReplyTos();
+
+        // --- RECIPIENTS (User) ---
+        $mail->setFrom($mail_user, 'Karve Web Solutions'); // From admin
+        $mail->addAddress($email, $name); // Send to the user who submitted the form
+
+        // --- CONTENT (User) ---
+        $mail->Subject = 'Thank you for contacting us!';
+        $user_body = "Dear " . $name . ",\n\n" .
+                     "Thank you for contacting us. We have received your message and will get back to you shortly.\n\n" .
+                     "Best regards,\n" .
+                     "The Team";
+        $mail->Body = $user_body;
+
+        // Send to user
         $mail->send();
 
     } catch (Exception $e) {
